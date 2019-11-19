@@ -18,33 +18,42 @@
  * Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef rfquack_config_radio_h
-#define rfquack_config_radio_h
+#ifndef rfquack_radio_cc1101_h
+#define rfquack_radio_cc1101_h
 
-#include "../defaults/radio.h"
+#include <RadioLib.h>
 
-#ifndef RFQUACK_REGISTER_HEX_FORMAT
-#define RFQUACK_REGISTER_HEX_FORMAT "%x"
+#define RFQUACK_RADIO "CC1101"
+
+// Modem configuration
+#ifndef RFQUACK_RADIO_SYNC_WORDS
+#define RFQUACK_RADIO_SYNC_WORDS CC1101_DEFAULT_SYNC_WORD
 #endif
 
-#ifndef RFQUACK_REGISTER_VALUE_HEX_FORMAT
-#define RFQUACK_REGISTER_VALUE_HEX_FORMAT "0b%b"
+#ifndef RFQUACK_RADIO_MAX_MSG_LEN
+#define RFQUACK_RADIO_MAX_MSG_LEN CC1101_MAX_PACKET_LENGTH
 #endif
 
-/*****************************************************************************
- * Radio parameters
- *****************************************************************************/
-
-#ifndef RFQUACK_RADIO_RX_QUEUE_LEN
-#define RFQUACK_RADIO_RX_QUEUE_LEN RFQUACK_RADIO_RX_QUEUE_LEN_DEFAULT
-#endif
-
-#if defined(RFQUACK_RADIO_RF69)
-#include <radio/rf69.h>
-#elif defined(RFQUACK_RADIO_CC1101)
-#include <radio/cc1101.h>
+#ifdef RFQUACK_RADIO_PIN_CS
+#define RFMCC1120_CS RFQUACK_RADIO_PIN_CS
 #else
-#error "You must choose the radio by defining RFQUACK_RADIO_*" // TODO add more radios
+#error "Please define RFQUACK_RADIO_PIN_CS"
 #endif
+
+#ifdef RFQUACK_RADIO_PIN_IRQ
+#define RFMCC1120_IRQ RFQUACK_RADIO_PIN_IRQ
+#else
+#error "Please define RFQUACK_RADIO_PIN_IRQ"
+#endif
+
+#ifdef RFQUACK_RADIO_PIN_RST
+#define RFMCC1120_RST RFQUACK_RADIO_PIN_RST
+#else
+#error "Please define RFQUACK_RADIO_PIN_RST"
+#endif
+
+#define RFQUACK_RADIO_TX_QUEUE_LEN 1
+
+typedef CC1101 RFQRadio;
 
 #endif

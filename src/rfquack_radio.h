@@ -29,6 +29,8 @@
 #include "rfquack.pb.h"
 
 #include <cppQueue.h>
+#include "RadioLib.h"
+#include "radio/cc1101.h"
 
 /*****************************************************************************
  * Variables
@@ -37,25 +39,37 @@ Queue rfquack_rx_q(sizeof(rfquack_Packet), RFQUACK_RADIO_RX_QUEUE_LEN, FIFO,
                    true);
 
 /* Radio instance */
-RFQRadio rfquack_rf(RFQUACK_RADIO_PIN_CS, RFQUACK_RADIO_PIN_RST,
-                    RFQUACK_RADIO_PIN_IRQ);
+// TODO use RFQUACK_RADIO_PIN_RST
+#define RFQUACK_RADIO_PIN_IRQ1 7//TODO FIX!
+Module *_mod = new Module(RFQUACK_RADIO_PIN_CS, RFQUACK_RADIO_PIN_IRQ, RFQUACK_RADIO_PIN_IRQ1);
+RFQRadio rfquack_rf(_mod);
+
+volatile bool _incomingDataAvailable = false;
+
+/**
+ * Function called when a complete packet is received
+ */
+void radioInterrupt(void) {
+  _incomingDataAvailable = true;
+}
 
 /**
  * @brief Changes the radio state in the radio driver.
  */
 void rfquack_update_mode() {
   if (rfq.mode == rfquack_Mode_IDLE) {
-    rfquack_rf.setModeIdle();
-#ifdef RFQUACK_LOG_ENABLED
-    Log.trace("Radio in IDLE mode");
-#endif
+    int16_t result = rfquack_rf.standby();
+    RFQUACK_LOG_TRACE("Radio in IDLE mode, resultCode=%d", result)
   }
 
   if (rfq.mode == rfquack_Mode_REPEAT || rfq.mode == rfquack_Mode_RX) {
-    rfquack_rf.setModeRx();
-#ifdef RFQUACK_LOG_ENABLED
-    Log.trace("Radio in RX mode");
-#endif
+    int16_t result = rfquack_rf.startReceive();
+
+    //Set interrupt on new packet
+    _incomingDataAvailable = false;
+    rfquack_rf.setGdo0Action(radioInterrupt);
+
+    RFQUACK_LOG_TRACE("Radio in RECEIVE mode, resultCode=%d", result)
   }
 
   // never set TX mode, it happens automatically
@@ -65,40 +79,35 @@ void rfquack_update_mode() {
  * @brief Changes preamble length in the radio driver.
  */
 void rfquack_update_preamble() {
-  rfquack_rf.setPreambleLength(rfq.modemConfig.preambleLen);
-  Log.trace("Preamble length:     %d bytes", rfq.modemConfig.preambleLen);
+  int16_t result = rfquack_rf.setPreambleLength(rfq.modemConfig.preambleLen);
+  RFQUACK_LOG_TRACE("Preamble length:     %d bytes, resultCode=%d", rfq.modemConfig.preambleLen, result)
 }
 
 /**
  * @brief Changes frequency in the radio driver.
  */
 void rfquack_update_frequency() {
-  if (!rfquack_rf.setFrequency(rfq.modemConfig.carrierFreq)) {
-    Log.error("⚠️  Set frequency failed");
-    return;
-  }
+  int16_t result = rfquack_rf.setFrequency(rfq.modemConfig.carrierFreq);
+  RFQUACK_LOG_TRACE("Frequency :     %f Mhz (?), resultCode=%d", rfq.modemConfig.carrierFreq, result)
 }
 
 /**
  * @brief Changes TX power in the radio driver
  */
 void rfquack_update_tx_power() {
-  rfquack_rf.setTxPower(rfq.modemConfig.txPower
+  int16_t result = rfquack_rf.setOutputPower(rfq.modemConfig.txPower);
+  RFQUACK_LOG_TRACE("Output Power :     %f dBm (?), resultCode=%d", rfq.modemConfig.txPower, result)
+
 #ifdef RFQUACK_RADIO_SET_HIGHPOWER
-                        ,
-                        rfq.modemConfig.isHighPowerModule
+  Log.fatal("HIGHPOWER mode is not implemented.");
 #endif
-  );
 }
 
 /**
  * @brief Chages modem config choice in the radio driver
  */
 void rfquack_update_modem_config_choice() {
-  rfquack_rf.setModemConfig(
-      (RFQRadioModemConfigChoice)rfq.modemConfig.modemConfigChoiceIndex);
-
-  Log.trace("Modem config set to %d", rfq.modemConfig.modemConfigChoiceIndex);
+  Log.fatal("Canned configs not implemented.");
 }
 
 /**
@@ -106,12 +115,13 @@ void rfquack_update_modem_config_choice() {
  */
 void rfquack_update_sync_words() {
   if (rfq.modemConfig.syncWords.size > 0) {
-    rfquack_rf.setSyncWords((uint8_t *)(rfq.modemConfig.syncWords.bytes),
-                            rfq.modemConfig.syncWords.size);
+    int16_t result = rfquack_rf.setSyncWord((uint8_t *) (rfq.modemConfig.syncWords.bytes),
+                                            rfq.modemConfig.syncWords.size);
+    RFQUACK_LOG_TRACE("Sync Words:          %d bytes, resultCode=%d", rfq.modemConfig.syncWords.size, result)
   } else {
-    Log.trace("Sync Words:          None (sync words detection disabled)");
     uint8_t nil = 0;
-    rfquack_rf.setSyncWords(&nil, rfq.modemConfig.syncWords.size);
+    int16_t result = rfquack_rf.setSyncWord(&nil, 0);
+    RFQUACK_LOG_TRACE("Sync Words:          None (sync words detection disabled), resultCode=%d", result)
   }
 }
 
@@ -124,25 +134,18 @@ void rfquack_update_sync_words() {
  *      - set preamble length and sync words
  */
 void rfquack_radio_setup() {
-  rfquack_rf.setDebug(RFQUACK_DEBUG_RADIO);
-  rfquack_rf.setPrinter(&LogPrinter);
 
-  Log.trace("📡 Setting up radio (CS: %d, RST: %d, IRQ: %d)",
-            RFQUACK_RADIO_PIN_CS, RFQUACK_RADIO_PIN_RST, RFQUACK_RADIO_PIN_IRQ);
+  RFQUACK_LOG_TRACE("📡 Setting up radio (CS: %d, RST: %d, IRQ: %d)",
+                    RFQUACK_RADIO_PIN_CS, RFQUACK_RADIO_PIN_RST, RFQUACK_RADIO_PIN_IRQ)
 
-  if (!rfquack_rf.init()) {
-    Log.error("⚠️  Radio init failed");
+  if (rfquack_rf.begin() != ERR_NONE) {
+    Log.fatal("⚠️  Radio init failed");
     return;
   }
-
-  Log.trace("📶 Radio initialized (debugging: %T)", RFQUACK_DEBUG_RADIO);
+  RFQUACK_LOG_TRACE("📶 Radio initialized ")
 
 #ifdef RFQUACK_RADIO_SET_FREQ
   rfquack_update_frequency();
-#endif
-
-#ifdef RFQUACK_RADIO_PARTNO
-  Log.trace(RFQUACK_RADIO " type %X ready to party 🎉", rfquack_rf.deviceType());
 #endif
 
 #ifdef RFQUACK_RADIO_SET_POWER
@@ -166,8 +169,7 @@ void rfquack_radio_setup() {
 
   rfquack_update_mode();
 
-  Log.trace("📶 Radio is fully set up (RFQuack mode: %d, radio mode: %d)",
-            rfq.mode, rfquack_rf.mode());
+  Log.trace("📶 Radio is fully set up (RFQuack mode: %d)", rfq.mode);
 }
 
 /**
@@ -189,8 +191,8 @@ void rfquack_update_radio_stats() {
  * @return True only if the queue has room and enqueueing went through.
  */
 bool rfquack_enqueue_packet(Queue *q, rfquack_Packet *pkt) {
-  if (pkt->data.size > RFQUACK_RADIO_MAX_MSG_LEN) {
-    Log.error("Cannot enqueue: message length exceeds limit");
+  if (pkt->data.size > sizeof(rfquack_Packet)) {
+    Log.error("Cannot enqueue: message length exceeds queue size limit");
     return false;
   }
 
@@ -202,7 +204,7 @@ bool rfquack_enqueue_packet(Queue *q, rfquack_Packet *pkt) {
 
   q->push(pkt);
 
-  Log.verbose("Packet enqueued: %d bytes", pkt->data.size);
+  RFQUACK_LOG_TRACE("Packet enqueued: %d bytes", pkt->data.size);
 
   return true;
 }
@@ -223,13 +225,6 @@ bool rfquack_send_packet(rfquack_Packet *pkt) {
     return false;
   }
 
-  if (pkt->data.size < RFQUACK_RADIO_MIN_MSG_LEN ||
-      pkt->data.size > RFQUACK_RADIO_MAX_MSG_LEN) {
-    Log.error("Payload length must be within %d and %d bytes",
-              RFQUACK_RADIO_MIN_MSG_LEN, RFQUACK_RADIO_MAX_MSG_LEN);
-    return false;
-  }
-
   uint32_t repeat = 1;
   uint32_t correct = 0;
 
@@ -237,8 +232,12 @@ bool rfquack_send_packet(rfquack_Packet *pkt) {
     repeat = pkt->repeat;
 
   for (uint32_t i = 0; i < repeat; i++) {
-    if(rfquack_rf.send((uint8_t *)(pkt->data.bytes), pkt->data.size))
+    int16_t result = rfquack_rf.transmit((uint8_t *) (pkt->data.bytes), pkt->data.size);
+    RFQUACK_LOG_TRACE("Packet trasmitted, resultCode=%d", result)
+
+    if (result == ERR_NONE) {
       correct++;
+    }
 
     if (pkt->has_delayMs)
       delay(pkt->delayMs);
@@ -280,12 +279,11 @@ void rfquack_rx_flush_loop() {
       Log.error("Encoding failed: %s", PB_GET_ERROR(&ostream));
     } else {
       if (!rfquack_transport_send(
-              RFQUACK_OUT_TOPIC RFQUACK_TOPIC_SEP RFQUACK_TOPIC_PACKET, buf,
-              ostream.bytes_written))
+        RFQUACK_OUT_TOPIC RFQUACK_TOPIC_SEP RFQUACK_TOPIC_PACKET, buf,
+        ostream.bytes_written))
         Log.error("Failed sending to transport");
-      else
-        Log.verbose("%d bytes of data sent on the transport",
-                    ostream.bytes_written);
+      else RFQUACK_LOG_TRACE("%d bytes of data sent on the transport",
+                             ostream.bytes_written);
     }
   }
 }
@@ -300,33 +298,37 @@ void rfquack_rx_loop() {
     return;
 
   rfquack_Packet pkt;
-  uint8_t len = sizeof(pkt.data.bytes);
+  uint8_t len = rfquack_rf.getPacketLength();
 
-  if (rfquack_rf.available()) { // this calls RH_*::setModeRx() internally
-    if (rfquack_rf.recv((uint8_t *)pkt.data.bytes, &len)) {
-      if (len > 0 && len <= RFQUACK_RADIO_MAX_MSG_LEN) {
+  if (_incomingDataAvailable) { // Radio sent an interrupt
+    int16_t result = rfquack_rf.readData((uint8_t *) pkt.data.bytes, len);
+    RFQUACK_LOG_TRACE("Recieved packet, resultCode=%d", result)
 
-#ifdef RFQUACK_DEV
-        Log.verbose("Data size = %d (bounds: %d, %d)", len, 0,
-                    RFQUACK_RADIO_MAX_MSG_LEN);
-#endif
+    //Remove flag and put radio back in RX mode
+    _incomingDataAvailable = false;
+    rfquack_rf.startReceive();
 
-        pkt.data.size = len;
-        pkt.millis = millis();
-        pkt.has_millis = true;
-
-        if (rfquack_packet_filter(&pkt)) {
-          rfquack_enqueue_packet(&rfquack_rx_q, &pkt);
-
-#ifdef RFQUACK_DEV
-          rfquack_log_packet(&pkt);
-#endif
-        }
-      }
-
+    // Update stats
+    if (result == ERR_NONE) {
       rfq.stats.rx_packets++;
-    } else
+    } else {
       rfq.stats.rx_failures++;
+    }
+
+    // Fill missing data
+    pkt.data.size = len;
+    pkt.millis = millis();
+    pkt.has_millis = true;
+
+    //Apply packet filters
+    if (rfquack_packet_filter(&pkt)) {
+      //Put packet in incoming queue.
+      rfquack_enqueue_packet(&rfquack_rx_q, &pkt);
+
+#ifdef RFQUACK_DEV
+      rfquack_log_packet(&pkt);
+#endif
+    }
   }
 }
 
@@ -347,26 +349,23 @@ void rfquack_change_modem_config_choice(uint32_t index) {
 /**
  * @brief Read register value (if permitted by the radio driver).
  *
- * @param addr Address of the register (check RadioHead).
+ * @param addr Address of the register
  *
  * @return Value from the register.
  */
-rfquack_register_value_t rfquack_read_register(rfquack_register_address_t reg) {
-  return rfquack_rf.spiRead(reg);
+uint8_t rfquack_read_register(uint8_t reg) {
+  return _mod->SPIreadRegister(reg);
 }
 
 /**
- * @brief Write register value (if permitted by the radio driver).
+ * @brief Write register value
  *
- * @param addr Address of the register (check RadioHead).
+ * @param addr Address of the register
  *
- * @return Some devices return a status byte during the first data transfer.
- * This byte is returned. it may or may not be meaningfule depending on the the
- * type of device being accessed (check RadioHead).
  */
-uint8_t rfquack_write_register(rfquack_register_address_t reg,
-                               rfquack_register_value_t value) {
-  return rfquack_rf.spiWrite(reg, value);
+void rfquack_write_register(uint8_t reg,
+                            uint8_t value) {
+  _mod->SPIwriteRegister(reg, value);
 }
 
 /**
@@ -379,7 +378,7 @@ static void rfquack_set_packet_format(char *payload, int payload_length) {
 
   // create stream from buffer
   pb_istream_t istream =
-      pb_istream_from_buffer((uint8_t *)payload, payload_length);
+    pb_istream_from_buffer((uint8_t *) payload, payload_length);
 
   if (!pb_decode(&istream, rfquack_PacketFormat_fields, &fmt)) {
     Log.error("Cannot decode PacketFormat: %s", PB_GET_ERROR(&istream));
@@ -387,12 +386,13 @@ static void rfquack_set_packet_format(char *payload, int payload_length) {
     return;
   }
 
-#ifdef RFQUACK_LOG_ENABLED
-  Log.trace("Setting packet format: fixed = %d, len = %d", fmt.fixed,
-            (uint8_t)fmt.len);
-#endif
-
-  rfquack_rf.setPacketFormat(fmt.fixed, (uint8_t)fmt.len);
+  if (fmt.fixed) {
+    int16_t result = rfquack_rf.fixedPacketLengthMode((uint8_t) fmt.len);
+    RFQUACK_LOG_TRACE("Setting radio to fixed len of %d bytes, resultCode=%d", (uint8_t) fmt.len, result)
+  } else {
+    int16_t result = rfquack_rf.variablePacketLengthMode((uint8_t) fmt.len);
+    RFQUACK_LOG_TRACE("Setting radio to variable len ( max %d bytes), resultCode=%d", (uint8_t) fmt.len, result)
+  }
 }
 
 /*
@@ -409,7 +409,8 @@ void rfquack_change_tx_power(uint32_t txPower) {
 }
 
 void rfquack_set_promiscuous(bool promiscuous) {
-  rfquack_rf.setPromiscuous(promiscuous);
+  int16_t result = rfquack_rf.setPromiscuousMode(promiscuous);
+  RFQUACK_LOG_TRACE("Promiscuous mode set to %d, resultCode=%d", promiscuous, result)
 }
 
 /*
@@ -422,13 +423,6 @@ void rfquack_change_sync_words(rfquack_ModemConfig_syncWords_t syncWords) {
     Log.trace("Disabling sync words detection");
     rfquack_update_sync_words();
     return;
-  } else {
-    if (syncWords.size > RFQUACK_MAX_SYNC_WORDS_LEN ||
-        syncWords.size < RFQUACK_MIN_SYNC_WORDS_LEN) {
-      Log.warning("Sync words must either be NULL, or between %d and %d bytes",
-                  RFQUACK_MIN_SYNC_WORDS_LEN, RFQUACK_MAX_SYNC_WORDS_LEN);
-      return;
-    }
   }
 
   for (uint8_t i = 0; i < syncWords.size; i++)
@@ -449,8 +443,7 @@ void rfquack_change_sync_words(rfquack_ModemConfig_syncWords_t syncWords) {
 void rfquack_change_preamble_len(size_t preambleLen) {
   // TODO input validation
 
-  Log.trace("Preamble length: %d -> %d", rfq.modemConfig.preambleLen,
-            preambleLen);
+  RFQUACK_LOG_TRACE("Preamble length: %d -> %d", rfq.modemConfig.preambleLen, preambleLen)
 
   rfq.modemConfig.preambleLen = preambleLen;
   rfquack_update_preamble();
@@ -462,8 +455,7 @@ void rfquack_change_preamble_len(size_t preambleLen) {
 void rfquack_change_is_high_power_module(bool isHighPowerModule) {
   // TODO input validation
 
-  Log.trace("Is high power: %d -> %d", rfq.modemConfig.isHighPowerModule,
-            isHighPowerModule);
+  RFQUACK_LOG_TRACE("Is high power: %d -> %d", rfq.modemConfig.isHighPowerModule, isHighPowerModule);
 
   rfq.modemConfig.isHighPowerModule = isHighPowerModule;
   rfquack_update_tx_power();
@@ -475,8 +467,7 @@ void rfquack_change_is_high_power_module(bool isHighPowerModule) {
 void rfquack_change_carrier_freq(float carrierFreq) {
   // TODO input validation
 
-  Log.trace("Carrier frequency: %F -> %F", rfq.modemConfig.carrierFreq,
-            carrierFreq);
+  RFQUACK_LOG_TRACE("Carrier frequency: %F -> %F", rfq.modemConfig.carrierFreq, carrierFreq);
 
   rfq.modemConfig.carrierFreq = carrierFreq;
   rfquack_update_frequency();
@@ -486,7 +477,7 @@ uint32_t rfquack_set_modem_config(rfquack_ModemConfig *modemConfig) {
   rfquack_ModemConfig _c = *modemConfig;
   uint32_t changes = 0;
 
-  Log.trace("Changing modem configuration");
+  RFQUACK_LOG_TRACE("Changing modem configuration");
 
   if (_c.has_carrierFreq) {
     rfquack_change_carrier_freq(_c.carrierFreq);

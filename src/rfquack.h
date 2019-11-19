@@ -140,8 +140,8 @@ uint32_t rfquack_set_status(rfquack_Status *st) {
  * @param addr Address of the register
  * @param value Value of the register
  */
-void rfquack_send_register(rfquack_register_address_t addr,
-                           rfquack_register_value_t value) {
+void rfquack_send_register(uint8_t addr,
+                           uint8_t value) {
   rfquack_Register reg;
   uint8_t buf[RFQUACK_MAX_PB_MSG_SIZE];
   pb_ostream_t ostream = pb_ostream_from_buffer(buf, RFQUACK_MAX_PB_MSG_SIZE);
@@ -263,16 +263,16 @@ static void rfquack_register_access(char *payload, int payload_length) {
   }
 
   // most of the time, this is just 1 byte (uint8_t)
-  rfquack_register_address_t addr = (rfquack_register_address_t)reg.address;
-  rfquack_register_value_t value;
+  uint8_t addr = (uint8_t)reg.address;
+  uint8_t value;
 
   // register set
   if (reg.has_value) {
-    value = (rfquack_register_value_t)reg.value;
-    uint8_t status = rfquack_write_register(addr, value);
+    value = (uint8_t)reg.value;
+    rfquack_write_register(addr, value);
     Log.trace("Register " RFQUACK_REGISTER_HEX_FORMAT
-              " = " RFQUACK_REGISTER_VALUE_HEX_FORMAT " (status = %X)",
-              addr, value, status);
+              " = " RFQUACK_REGISTER_VALUE_HEX_FORMAT,
+              addr, value);
   } else { // register get
     value = rfquack_read_register(addr);
 

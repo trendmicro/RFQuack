@@ -69,6 +69,12 @@ SoftwareSerial LogPrinter(RFQUACK_LOG_SS_RX_PIN, RFQUACK_LOG_SS_TX_PIN, false,
 #define LogPrinter Serial1 // Secondary hardware serial is used for logging
 #endif
 
+#ifdef RFQUACK_LOG_ENABLED
+#define RFQUACK_LOG_TRACE(...) {     Log.trace(__VA_ARGS__); }
+#else
+#define RFQUACK_LOG_TRACE(...) {}
+#endif
+
 void rfquack_logging_setup() {
   LogPrinter.begin(RFQUACK_LOG_PRINTER_BAUD_RATE);
 
