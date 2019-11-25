@@ -43,6 +43,8 @@
 #include <radio/rf69.h>
 #elif defined(RFQUACK_RADIO_CC1101)
 #include <radio/cc1101.h>
+#elif defined(RFQUACK_RADIO_NRF24)
+#include <radio/nRF24.h>
 #else
 #error "You must choose the radio by defining RFQUACK_RADIO_*" // TODO add more radios
 #endif

@@ -18,24 +18,27 @@
  * Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef rfquack_radio_cc1101_h
-#define rfquack_radio_cc1101_h
+#ifndef rfquack_radio_nrf24_h
+#define rfquack_radio_nrf24_h
 
 #include <RadioLib.h>
 
-#define RFQUACK_RADIO "CC1101"
+#define RFQUACK_RADIO "nRF24"
 
 // Modem configuration
-#ifndef RFQUACK_RADIO_SYNC_WORDS
-#define RFQUACK_RADIO_SYNC_WORDS CC1101_DEFAULT_SYNC_WORD
-#endif
 
 #ifndef RFQUACK_RADIO_MAX_MSG_LEN
-#define RFQUACK_RADIO_MAX_MSG_LEN CC1101_MAX_PACKET_LENGTH
+#define RFQUACK_RADIO_MAX_MSG_LEN NRF24_MAX_PACKET_LENGTH
 #endif
 
 #ifndef RFQUACK_RADIO_PIN_CS
 #error "Please define RFQUACK_RADIO_PIN_CS"
+#endif
+
+#ifndef RFQUACK_RADIO_PIN_CE
+#error "Please define RFQUACK_RADIO_PIN_CE (Chip Enable)"
+#else
+#define RFQUACK_RADIO_PIN_IRQ RFQUACK_RADIO_PIN_CE
 #endif
 
 #ifndef RFQUACK_RADIO_PIN_IRQ
@@ -43,15 +46,19 @@
 #endif
 
 #ifndef RFQUACK_RADIO_PIN_IRQ1
-#error "Please define RFQUACK_RADIO_PIN_IRQ"
+#error "Please define RFQUACK_RADIO_PIN_IRQ1 (nRF24 IRQ)"
 #endif
 
 #define RFQUACK_RADIO_TX_QUEUE_LEN 1
 
-typedef CC1101 RFQRadio;
+#define RFQUACK_RADIO_NO_CUSTOM_PREAMBLE
+#define RFQUACK_RADIO_NO_CUSTOM_SYNCWORD
+#define RFQUACK_RADIO_NO_CUSTOM_PACKET_FORMAT
+
+typedef nRF24 RFQRadio;
 
 void setInterrupt(RFQRadio rfqRadio, void (*func)(void)){
-  rfqRadio.setGdo0Action(func);
+  rfqRadio.setIrqAction(func);
 }
 
 #endif

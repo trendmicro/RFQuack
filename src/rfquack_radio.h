@@ -30,7 +30,6 @@
 
 #include <cppQueue.h>
 #include "RadioLib.h"
-#include "radio/cc1101.h"
 
 /*****************************************************************************
  * Variables
@@ -40,7 +39,6 @@ Queue rfquack_rx_q(sizeof(rfquack_Packet), RFQUACK_RADIO_RX_QUEUE_LEN, FIFO,
 
 /* Radio instance */
 // TODO use RFQUACK_RADIO_PIN_RST
-#define RFQUACK_RADIO_PIN_IRQ1 7//TODO FIX!
 Module *_mod = new Module(RFQUACK_RADIO_PIN_CS, RFQUACK_RADIO_PIN_IRQ, RFQUACK_RADIO_PIN_IRQ1);
 RFQRadio rfquack_rf(_mod);
 
@@ -67,7 +65,7 @@ void rfquack_update_mode() {
 
     //Set interrupt on new packet
     _incomingDataAvailable = false;
-    rfquack_rf.setGdo0Action(radioInterrupt);
+    setInterrupt(rfquack_rf, radioInterrupt);
 
     RFQUACK_LOG_TRACE("Radio in RECEIVE mode, resultCode=%d", result)
   }
@@ -79,8 +77,12 @@ void rfquack_update_mode() {
  * @brief Changes preamble length in the radio driver.
  */
 void rfquack_update_preamble() {
+#ifdef RFQUACK_RADIO_NO_CUSTOM_PREAMBLE
+  RFQUACK_LOG_TRACE("You cannot customize preamble on this radio")
+#else
   int16_t result = rfquack_rf.setPreambleLength(rfq.modemConfig.preambleLen);
   RFQUACK_LOG_TRACE("Preamble length:     %d bytes, resultCode=%d", rfq.modemConfig.preambleLen, result)
+#endif
 }
 
 /**
@@ -114,6 +116,9 @@ void rfquack_update_modem_config_choice() {
  * @brief Changes sync words in the radio driver.
  */
 void rfquack_update_sync_words() {
+#ifdef RFQUACK_RADIO_NO_CUSTOM_SYNCWORD
+  rfquack_rf.setAddressWidth(rfq.modemConfig.syncWords.size);
+#else
   if (rfq.modemConfig.syncWords.size > 0) {
     int16_t result = rfquack_rf.setSyncWord((uint8_t *) (rfq.modemConfig.syncWords.bytes),
                                             rfq.modemConfig.syncWords.size);
@@ -123,6 +128,7 @@ void rfquack_update_sync_words() {
     int16_t result = rfquack_rf.setSyncWord(&nil, 0);
     RFQUACK_LOG_TRACE("Sync Words:          None (sync words detection disabled), resultCode=%d", result)
   }
+#endif
 }
 
 /*
@@ -232,7 +238,7 @@ bool rfquack_send_packet(rfquack_Packet *pkt) {
     repeat = pkt->repeat;
 
   for (uint32_t i = 0; i < repeat; i++) {
-    int16_t result = rfquack_rf.transmit((uint8_t *) (pkt->data.bytes), pkt->data.size);
+    int16_t result = rfquack_rf.transmit((uint8_t *) (pkt->data.bytes), pkt->data.size,0);
     RFQUACK_LOG_TRACE("Packet trasmitted, resultCode=%d", result)
 
     if (result == ERR_NONE) {
@@ -386,6 +392,7 @@ static void rfquack_set_packet_format(char *payload, int payload_length) {
     return;
   }
 
+#ifndef RFQUACK_RADIO_NO_CUSTOM_PACKET_FORMAT
   if (fmt.fixed) {
     int16_t result = rfquack_rf.fixedPacketLengthMode((uint8_t) fmt.len);
     RFQUACK_LOG_TRACE("Setting radio to fixed len of %d bytes, resultCode=%d", (uint8_t) fmt.len, result)
@@ -393,6 +400,9 @@ static void rfquack_set_packet_format(char *payload, int payload_length) {
     int16_t result = rfquack_rf.variablePacketLengthMode((uint8_t) fmt.len);
     RFQUACK_LOG_TRACE("Setting radio to variable len ( max %d bytes), resultCode=%d", (uint8_t) fmt.len, result)
   }
+#else
+  RFQUACK_LOG_TRACE("Change packet format not impemented.")
+#endif
 }
 
 /*
