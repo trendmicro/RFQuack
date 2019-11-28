@@ -2,6 +2,11 @@
 #define RFQUACK_PROJECT_RFQRADIO_H
 
 #define ERR_COMMAND_NOT_IMPLEMENTED -590  // 501 was already taken...
+#define ERR_WRONG_MODE              -591
+
+#define RFQRADIO_MODE_STANDBY 0
+#define RFQRADIO_MODE_TX 1
+#define RFQRADIO_MODE_RX 2
 
 // Enable super powers :)
 #define RADIOLIB_GODMODE
@@ -9,7 +14,7 @@
 #include <RadioLib.h>
 
 // Bad trick to solve IRQ problems. Will be fixed soon.
-void *rfqRadioInstance;
+void *rfqRadioInstance = nullptr;
 
 class RFQRadio {
 public:
@@ -26,7 +31,7 @@ public:
      * @return
      */
     virtual int16_t standbyMode() {
-      return _driver->standby();
+      return ERR_COMMAND_NOT_IMPLEMENTED;
     }
 
     /**
@@ -52,7 +57,7 @@ public:
      * @return
      */
     virtual int16_t transmit(uint8_t *data, size_t len) {
-      return _driver->transmit(data, len);
+      return ERR_COMMAND_NOT_IMPLEMENTED;
     }
 
     /**
@@ -102,8 +107,13 @@ public:
      * True whenever there's data available on radio's RX FIFO.
      * @return
      */
-    bool incomingDataAvailable() {
-      return _incomingDataAvailable;
+    bool isIncomingDataAvailable() {
+      // Flag makes sense only if in RX mode.
+      if (_mode != RFQRADIO_MODE_RX) {
+        return false;
+      }
+
+      return _flag;
     }
 
     /**
@@ -112,7 +122,20 @@ public:
      * @param len
      * @return
      */
-    virtual int16_t readData(uint8_t *data, size_t len) = 0;
+    virtual int16_t readData(uint8_t *data, size_t len) {
+      // Exit if not in RX mode.
+      if (_mode != RFQRADIO_MODE_RX) {
+        RFQUACK_LOG_TRACE(F("Trying to readData without being in RX mode."))
+        return ERR_WRONG_MODE;
+      }
+
+      // Let's assume readData() call rate is so high that there's
+      // always almost a packet to read from radio.
+      setFlag(false);
+
+      // Read data from fifo.
+      return _driver->readData(data, len);
+    }
 
     /**
      * Reads a radio's internal register.
@@ -155,19 +178,41 @@ public:
       return ERR_COMMAND_NOT_IMPLEMENTED;
     }
 
+    /**
+     * Sets callback on interrupt.
+     * @param func
+     */
+    virtual void setInterruptAction(void (*func)(void)) = 0;
+
+    /**
+     * Used from IRQ to set flag and from wrapper to clean it.
+     * @param flagValue
+     */
+    void setFlag(bool flagValue) {
+      _flag = flagValue;
+    }
+
 protected:
     RFQRadio(PhysicalLayer *driver) {
       _driver = driver;
       rfqRadioInstance = this;
     }
 
-    void setIncomingDataAvailable(bool isAvailable) {
-      _incomingDataAvailable = isAvailable;
+    bool getFlag() {
+      return _flag;
     }
 
+    uint8_t _mode = RFQRADIO_MODE_STANDBY; // RFQRADIO_MODE_[STANDBY|RX|TX]
 private:
     PhysicalLayer *_driver;
-    bool _incomingDataAvailable;
+    bool _flag = false;
 };
+
+void radioInterrupt() {
+  if (rfqRadioInstance != nullptr) {
+    ((RFQRadio *) rfqRadioInstance)->setFlag(true);
+  }
+}
+
 
 #endif //RFQUACK_PROJECT_RFQRADIO_H

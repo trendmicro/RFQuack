@@ -294,7 +294,7 @@ void rfquack_rx_loop() {
   rfquack_Packet pkt;
   uint8_t len = rfquack_rf->getPacketLength();
 
-  if (rfquack_rf->incomingDataAvailable()) { // Radio sent an interrupt
+  if (rfquack_rf->isIncomingDataAvailable()) { // Radio sent an interrupt
     int16_t result = rfquack_rf->readData((uint8_t *) pkt.data.bytes, len);
     RFQUACK_LOG_TRACE("Recieved packet, resultCode=%d", result)
 
