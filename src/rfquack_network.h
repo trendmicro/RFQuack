@@ -104,7 +104,7 @@ void rfquack_network_connect() {
   while (WiFi.status() != WL_CONNECTED) {
     Log.error("WiFi not connected: %d (retry: %d)", WiFi.status(),
               ++rfquack_wifi_retry);
-		//WiFi.printDiag(Serial);
+    //WiFi.printDiag(Serial);
     delay(RFQUACK_WIFI_RETRY_DELAY);
   }
 }
@@ -123,10 +123,13 @@ void rfquack_network_loop() {
 }
 
 #elif defined(RFQUACK_IS_STANDALONE)
+
 void rfquack_network_setup() {
   Log.trace("Standalone mode network setup: done!");
 }
+
 void rfquack_network_loop() {}
+
 #else
 #error "Network configuration unexpected"
 #endif

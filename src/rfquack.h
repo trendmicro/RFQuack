@@ -637,7 +637,7 @@ void rfquack_init() {
   Log.trace("RFQuack data structure initialized: %s", RFQUACK_UNIQ_ID);
 }
 
-void rfquack_setup() {
+void rfquack_setup(RFQRadio* rfqRadio) {
   rfquack_logging_setup();
 
   delay(100);
@@ -660,7 +660,7 @@ void rfquack_setup() {
 
   delay(100);
 
-  rfquack_radio_setup();
+  rfquack_radio_setup(rfqRadio);
 
   delay(100);
 
