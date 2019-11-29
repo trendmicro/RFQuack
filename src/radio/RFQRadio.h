@@ -133,6 +133,9 @@ public:
       // always almost a packet to read from radio.
       setFlag(false);
 
+      // Shame on RadioLib, after readData driver resets interrupts and goes in STANDBY.
+      _mode = RFQRADIO_MODE_STANDBY;
+
       // Read data from fifo.
       return _driver->readData(data, len);
     }
