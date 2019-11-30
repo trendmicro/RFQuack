@@ -27,6 +27,12 @@
 /* Disable Software Serial logging  */
 #define RFQUACK_LOG_SS_DISABLED
 
+/* Default radio config */
+// carrier frequency:           2400 MHz
+// data rate:                   1000 kbps
+// output power:                -12 dBm
+// address width:               5 bytes
+// address                      0x01, 0x23, 0x45, 0x67, 0x89
 
 /*****************************************************************************
  * /RFQuack configuration - DO NOT EDIT BELOW THIS LINE (MAYBE YES?)
