@@ -11,7 +11,13 @@
 // Enable super powers :)
 #define RADIOLIB_GODMODE
 
+/* Dirty trick to prevent RadioLib's MQTT class to be included,
+ * It clashes with RFQuack's one.
+*/
+#define _RADIOLIB_MQTT_H
+
 #include <RadioLib.h>
+
 
 // Bad trick to solve IRQ problems. Will be fixed soon.
 void *rfqRadioInstance = nullptr;
