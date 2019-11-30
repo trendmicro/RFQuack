@@ -30,6 +30,7 @@
 
 #include <cppQueue.h>
 #include <radio/RFQnRF24.h>
+#include <radio/RFQCC1101.h>
 
 #include "defaults/radio.h"
 
