@@ -555,7 +555,7 @@ void rfquack_dispatch_command(char *topic, char *payload, int payload_length) {
   /***********************************************************************
    * Set promiscuous mode
    ***********************************************************************/
-  // Set promiscuosu mode: "rfquack/in/set/promiscuous"
+  // Set promiscuous mode: "rfquack/in/set/promiscuous"
   if (strcmp(topic, RFQUACK_IN_TOPIC RFQUACK_TOPIC_SEP RFQUACK_TOPIC_SET
                         RFQUACK_TOPIC_SEP RFQUACK_TOPIC_PROMISCUOUS) == 0) {
     rfquack_set_promiscuous(true);
