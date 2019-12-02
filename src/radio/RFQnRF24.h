@@ -151,6 +151,24 @@ public:
       return _driver->setFrequency(carrierFreq);
     }
 
+    int16_t setPromiscuousMode(bool isPromiscuous) override {
+      // Set syncWord as preamble's tail.
+      byte sync[2] = {0xAA, 0xAA};
+      int16_t state = setSyncWord(sync, 2);
+      if (state != ERR_NONE) {
+        return state;
+      }
+
+      // Disable auto ACK
+      state = _driver->setAutoAck(false);
+      if (state != ERR_NONE) {
+        return state;
+      }
+
+      // Disable CRC
+      return _driver->setCrcFiltering(false);
+    }
+
 private:
     void clearInterruptsAndRemoveFlag() {
       _driver->clearIRQ();
